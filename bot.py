@@ -8,8 +8,8 @@ from datetime import datetime
 import traceback
 
 # ============================= CONFIG =============================
-TELEGRAM_TOKEN = "8558387224:AAElr4m5BYIsquJBOr0PBh1-OXZ4dzMrer4"
-TELEGRAM_CHAT_IDS = ["5054484162", "497819952"]
+TELEGRAM_TOKEN = "8558387224:AAElr4m5BYIsquJBOr0PBh1-OXZ4dzMrer4" 
+TELEGRAM_CHAT_IDS = ["497819952"]
 
 SCAN_THRESHOLD = 0.25       # Min % to shortlist candidates
 ALERT_THRESHOLD = 5.0       # Instant alert threshold in %
@@ -70,11 +70,10 @@ def send_telegram(message):
 # -------------------- Utility / fetch functions --------------------
 def normalize(sym):
     """Normalize symbol names to a common comparable form."""
+    # Binance: BTCUSDT, Gate.io: BTC_USDT
     if not sym:
         return sym
-    s = sym.upper()
-    # Gate.io contracts: BTC_USDT, strip underscore for comparison with Binance BTCUSDT
-    s = s.replace('_', '')
+    s = sym.upper().replace("_", "")
     return s
 
 def get_binance_symbols(retries=2):
@@ -113,8 +112,12 @@ def get_gateio_symbols(retries=2):
 def get_common_symbols():
     bin_syms = get_binance_symbols()
     gate_syms = get_gateio_symbols()
+    logger.info("Sample Binance symbols: %s", bin_syms[:10])
+    logger.info("Sample Gate.io symbols: %s", gate_syms[:10])
     bin_set = {normalize(s) for s in bin_syms}
     gate_set = {normalize(s) for s in gate_syms}
+    logger.info("Normalized Binance sample: %s", list(bin_set)[:10])
+    logger.info("Normalized Gate.io sample: %s", list(gate_set)[:10])
     common = bin_set.intersection(gate_set)
     gate_map = {}
     dup_count = 0
@@ -122,7 +125,6 @@ def get_common_symbols():
         n = normalize(s)
         if n in gate_map and gate_map[n] != s:
             dup_count += 1
-            # keep first and warn in debug
         else:
             gate_map[n] = s
     if dup_count:
@@ -131,7 +133,6 @@ def get_common_symbols():
     return common, gate_map
 
 def get_binance_book(retries=1):
-    """Fetch full binance bookTicker list and return dict symbol->{bid,ask}"""
     for attempt in range(1, retries+1):
         try:
             r = requests.get(BINANCE_BOOK_URL, timeout=10)
@@ -152,7 +153,6 @@ def get_binance_book(retries=1):
             time.sleep(0.5)
 
 def get_binance_price(symbol, session, retries=1):
-    """Fetch single-symbol binance bookTicker"""
     for attempt in range(1, retries+1):
         try:
             url = BINANCE_TICKER_URL.format(symbol=symbol)
@@ -174,7 +174,6 @@ def get_binance_price(symbol, session, retries=1):
             time.sleep(0.2)
 
 def get_gateio_tickermap():
-    """Fetch all Gate.io USDT perpetual tickers, return symbol->ticker dict"""
     try:
         r = requests.get(GATEIO_TICKER_URL, timeout=10)
         r.raise_for_status()
@@ -190,8 +189,6 @@ def get_gateio_tickermap():
         return {}
 
 def get_gateio_price_once(symbol, session, retries=1):
-    """Fetch single-symbol Gate.io USDT futures ticker (perpetual)"""
-    # Gate.io uses all-tickers endpoint, so we use session-less, ignore retries here
     try:
         tickers = get_gateio_tickermap()
         if symbol not in tickers:
@@ -207,11 +204,9 @@ def get_gateio_price_once(symbol, session, retries=1):
         return None, None
 
 def threaded_gateio_prices(symbols):
-    """Parallel fetch of Gate.io prices for a list of symbols (original Gate.io symbol forms)"""
     prices = {}
     if not symbols:
         return prices
-    # fetch shared ticker map ONCE
     tickers = get_gateio_tickermap()
     for s in symbols:
         try:
@@ -227,8 +222,6 @@ def threaded_gateio_prices(symbols):
 
 # -------------------- Spread calculation --------------------
 def calculate_spread(bin_bid, bin_ask, gate_bid, gate_ask):
-    """Return positive spread when Gate.io bid > Binance ask (long bin, short gate),
-       negative spread when Gate.io ask < Binance bid (long gate, short bin)"""
     try:
         if not all([bin_bid, bin_ask, gate_bid, gate_ask]) or bin_ask <= 0 or bin_bid <= 0:
             return None
@@ -255,7 +248,6 @@ def main():
     while True:
         window_start = time.time()
         try:
-            # 1) Full scan once at start of window
             common_symbols, gate_map = get_common_symbols()
             if not common_symbols:
                 logger.warning("No common symbols — retrying after short sleep")
@@ -293,7 +285,6 @@ def main():
                 time.sleep(to_sleep)
                 continue
 
-            # 2) Focused monitoring for MONITOR_DURATION seconds
             window_end = window_start + MONITOR_DURATION
             while time.time() < window_end and candidates:
                 round_start = time.time()
