@@ -8,7 +8,7 @@ from datetime import datetime
 import traceback
 
 # ============================= CONFIG =============================
-TELEGRAM_TOKEN = "8326783777:AAG5kOiyDCFc5giwwiIsDjKH9GUVLtuJ9ow"
+TELEGRAM_TOKEN = "8558387224:AAElr4m5BYIsquJBOr0PBh1-OXZ4dzMrer4"
 TELEGRAM_CHAT_IDS = ["5054484162", "497819952"]
 
 SCAN_THRESHOLD = 0.25       # Min % to shortlist candidates
