@@ -8,7 +8,7 @@ from datetime import datetime
 import traceback
 
 # ============================= CONFIG =============================
-TELEGRAM_TOKEN = "8558387224:AAElr4m5BYIsquJBOr0PBh1-OXZ4dzMrer4" 
+TELEGRAM_TOKEN = "8558387224:AAElr4m5BYIsquJBOr0PBh1-OXZ4dzMrer4"
 TELEGRAM_CHAT_IDS = ["497819952"]
 
 SCAN_THRESHOLD = 0.25       # Min % to shortlist candidates
@@ -70,7 +70,6 @@ def send_telegram(message):
 # -------------------- Utility / fetch functions --------------------
 def normalize(sym):
     """Normalize symbol names to a common comparable form."""
-    # Binance: BTCUSDT, Gate.io: BTC_USDT
     if not sym:
         return sym
     s = sym.upper().replace("_", "")
@@ -94,12 +93,23 @@ def get_binance_symbols(retries=2):
             time.sleep(0.7)
 
 def get_gateio_symbols(retries=2):
+    """Fetch Gate.io perpetual contract symbols, print API response for debugging."""
     for attempt in range(1, retries + 1):
         try:
             r = requests.get(GATEIO_INFO_URL, timeout=10)
             r.raise_for_status()
             data = r.json()
-            syms = [s["name"] for s in data if s.get("in_delisting") is False and s.get("is_open") is True]
+            logger.info("Raw Gate.io API data: %s", str(data)[:1000])  # Show first part for debug
+            # Confirm it's a list of dicts. If it's {'message': ..., ...}, treat as empty.
+            contract_list = []
+            if isinstance(data, list):
+                contract_list = data
+            elif isinstance(data, dict) and "contracts" in data:
+                # Just in case their API changed to dict format
+                contract_list = data["contracts"]
+            else:
+                contract_list = []
+            syms = [s["name"] for s in contract_list if s.get("in_delisting") is False and s.get("is_open") is True]
             logger.debug("[GATEIO] fetched %d symbols (sample: %s)", len(syms), syms[:6])
             return syms
         except Exception as e:
@@ -112,13 +122,17 @@ def get_gateio_symbols(retries=2):
 def get_common_symbols():
     bin_syms = get_binance_symbols()
     gate_syms = get_gateio_symbols()
+
     logger.info("Sample Binance symbols: %s", bin_syms[:10])
     logger.info("Sample Gate.io symbols: %s", gate_syms[:10])
+
     bin_set = {normalize(s) for s in bin_syms}
     gate_set = {normalize(s) for s in gate_syms}
     logger.info("Normalized Binance sample: %s", list(bin_set)[:10])
     logger.info("Normalized Gate.io sample: %s", list(gate_set)[:10])
+
     common = bin_set.intersection(gate_set)
+
     gate_map = {}
     dup_count = 0
     for s in gate_syms:
